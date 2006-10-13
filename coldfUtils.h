@@ -7,6 +7,7 @@
 
 #include <rtems.h>
 #include <mcf5282/mcf5282.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -64,6 +65,17 @@ coldfEportEpdrSet(int bit, unsigned value);
 
 int
 coldfEportSetup(int pin, int config);
+
+/* DMA Transfer : WARNING -- this is work in progress and the API might change */
+
+int
+coldfDMAStart(int chan, uint8_t *to, uint8_t *from, uint32_t size, int ext, int poll, int tomem, int cache_coherency);
+
+/* Dump raw registers of DMA channel (0..3) and DMA timer (0..3) to stdout
+ * RETURNS: 0 on success, -1 (invalid argument)
+ */
+int
+coldfDMADump(int chan, int timer);
 
 #ifdef __cplusplus
 }

@@ -4,7 +4,7 @@
 #include <rtems/rtems/cache.h>
 #include <stdio.h>
 
-#include <drv5282DMA.h>
+#include "coldfUtils.h"
 
 /* Hmm __IPSBAR is defined in the linker script :-( */
 
@@ -19,6 +19,8 @@
 
 #include <stdint.h>
 
+#define CHANCHK(chan) do { if ((chan) < 0 || (chan) > 3) return -1; } while (0)
+
 #define DMA_CHNL 0
 #define DMA_TIMR 0
 
@@ -30,28 +32,35 @@ extern uint32_t Read_timer();
  * expansion -- this tells me that whoever wrote those was maybe a novice...
  */
 
-void
-drv5282DMATimerSetup()
+int
+coldfDMATimerSetup(int chan, int dtmr)
 {
-	/* route DMA timer to channel */
-	MCF5282_SCM_DMAREQC  = MCF5282_SCM_DMAREQC_DMAC0( (MCF5282_SCM_DMAREQC_DMATIMER0 + DMA_TIMR) ) << ( DMA_CHNL << 2 );
+	CHANCHK(chan);
+	CHANCHK(dtmr);
 
-#if 0 == DMA_TIMR
-	/* configure input pin */
-	MCF5282_GPIO_PTDPAR  = MCF5282_GPIO_PTDPAR_PTDPA1(3);
-#else
-#error "Please add code to assign DTINxx pin"
-#endif
+	/* route DMA timer to channel */
+	MCF5282_SCM_DMAREQC  = MCF5282_SCM_DMAREQC_DMAC0( (MCF5282_SCM_DMAREQC_DMATIMER0 + dtmr) ) << ( chan << 2 );
+
+	if ( 0 == dtmr ) {
+		/* configure input pin */
+		MCF5282_GPIO_PTDPAR  = MCF5282_GPIO_PTDPAR_PTDPA1(3);
+	} else {
+		fprintf(stderr,"Setup for DMA timers other than 0 not implemented yet\n");
+		fprintf(stderr,"Please add code to assign DTINxx pin\n");
+		return -1;
+	}
 
 	/* setup DMA timer */
 	/* capture event on raising edge (fifo full), use internal clock and bring out of reset */
-	MCF5282_TIMER_DTMR((DMA_TIMR)) = MCF5282_TIMER_DTMR_CE_RISE | MCF5282_TIMER_DTMR_CLK_DIV1 | MCF5282_TIMER_DTMR_RST;
+	MCF5282_TIMER_DTMR((dtmr)) = MCF5282_TIMER_DTMR_CE_RISE | MCF5282_TIMER_DTMR_CLK_DIV1 | MCF5282_TIMER_DTMR_RST;
 
 	/* enable DMA request */
-	MCF5282_TIMER_DTXMR((DMA_TIMR)) = MCF5282_TIMER_DTXMR_DMAEN;
+	MCF5282_TIMER_DTXMR((dtmr)) = MCF5282_TIMER_DTXMR_DMAEN;
 
 	/* make sure diagnostic timer is up */
 	Timer_initialize();
+
+	return 0;
 }
 
 #define DMA_BITS_TO_MEM  0 \
@@ -107,15 +116,22 @@ drv5282DMATimerSetup()
 		  /* | MCF5282_DMA_DCR_START      */ \
 		  | MCF5282_DMA_DCR_AT
 
-uint32_t
-drv5282ioDMA(uint8_t *to, uint8_t *from, uint32_t size, int ext, int poll, int tomem)
+int
+coldfDMAStart(int chan, uint8_t *to, uint8_t *from, uint32_t size, int ext, int poll, int tomem, int cc)
 {
+#if defined(CACHE_DEBUG) || defined(TIMING_DEBUG)
 uint32_t now, then;
-uint32_t linesz = rtems_cache_get_data_line_size();
-uint32_t abeg,aend;
+#endif
+uint32_t linesz  = rtems_cache_get_data_line_size();
 uint32_t linemsk = linesz - 1;
+uint32_t abeg,aend;
+int      rval;
 
-	/* INVALIDATE/FLUSH CACHE */
+	CHANCHK(chan);
+
+
+	if ( cc ) {
+		/* INVALIDATE/FLUSH CACHE */
 
 #ifdef CACHE_DEBUG
 then = Read_timer();
@@ -143,24 +159,28 @@ then = Read_timer();
 		rtems_cache_flush_multiple_data_lines((void*)abeg, aend-abeg);
 	}
 
+
 #ifdef CACHE_DEBUG
 now = Read_timer();
 
 printf("Flushing %i bytes took %uus\n",aend-abeg,now-then);
 #endif
+	}
 
 	/* SETUP DMA */
 
 	/* clear last condition */
-	MCF5282_DMA_DSR((DMA_CHNL)) = MCF5282_DMA_DSR_DONE;
+	MCF5282_DMA_DSR((chan)) = MCF5282_DMA_DSR_DONE;
 
 	/* addresses and byte count */
-	MCF5282_DMA_SAR((DMA_CHNL)) = (uint32_t)from;
-	MCF5282_DMA_DAR((DMA_CHNL)) = (uint32_t)to;
+	MCF5282_DMA_SAR((chan)) = (uint32_t)from;
+	MCF5282_DMA_DAR((chan)) = (uint32_t)to;
 
-	MCF5282_DMA_BCR((DMA_CHNL)) = (MCF5282_SCM_MPARK & MCF5282_SCM_MPARK_BCR24BIT) ? size : size << 16;
+	MCF5282_DMA_BCR((chan)) = (MCF5282_SCM_MPARK & MCF5282_SCM_MPARK_BCR24BIT) ? size : size << 16;
 
+#ifdef TIMING_DEBUG
 	then = Read_timer();
+#endif
 
 	/* setup control register and START */
 
@@ -169,31 +189,40 @@ printf("Flushing %i bytes took %uus\n",aend-abeg,now-then);
 	 * DSIZE_LONG:  66us
 	 * DSIZE_WORD: 130us
 	 */
-	MCF5282_DMA_DCR((DMA_CHNL)) = (tomem ? DMA_BITS_TO_MEM : DMA_BITS_FROM_MEM) | (ext ? MCF5282_DMA_DCR_EEXT : MCF5282_DMA_DCR_START);
+	MCF5282_DMA_DCR((chan)) = (tomem ? DMA_BITS_TO_MEM : DMA_BITS_FROM_MEM) | (ext ? MCF5282_DMA_DCR_EEXT : MCF5282_DMA_DCR_START);
 
 	/* POLL FOR TERMINATION */
 
 	if ( !ext && poll ) {
-		while ( ! (MCF5282_DMA_DSR((DMA_CHNL)) & MCF5282_DMA_DSR_DONE) )
+		while ( ! (MCF5282_DMA_DSR((chan)) & MCF5282_DMA_DSR_DONE) )
 			/* Poll */;
 	}
 
+#ifdef TIMING_DEBUG
 	now  = Read_timer();
+	printf("DMA took %uus\n",now-then);
+#endif
 
-	return ((now-then) & 0x00ffffff) | (MCF5282_DMA_DSR((DMA_CHNL))<<24) ;
+	rval = (uint8_t)MCF5282_DMA_DSR((chan));
+
+	return ( 0 == (rval & ~ MCF5282_DMA_DSR_DONE) ) ? 0 : rval;
 }
 
-void
-drv5282DMADump()
+int
+coldfDMADump(int chan, int dtmr)
 {
-	printf("DMA\n");
+	CHANCHK(chan);
+	CHANCHK(dtmr);
+
+	printf("DMA (channel %i)\n",chan);
 	printf("  SAR: 0x%08lx, DAR: 0x%08lx, BCR: 0x%08lx, DSR: 0x%02x\n",
-		MCF5282_DMA_SAR((DMA_CHNL)),
-		MCF5282_DMA_DAR((DMA_CHNL)),
-		MCF5282_DMA_BCR((DMA_CHNL)),
-		MCF5282_DMA_DSR((DMA_CHNL)));
+		MCF5282_DMA_SAR((chan)),
+		MCF5282_DMA_DAR((chan)),
+		MCF5282_DMA_BCR((chan)),
+		MCF5282_DMA_DSR((chan)));
 	printf("DMATIMER\n");
 	printf("  DTER: 0x%02x DTCR: 0x%08lx\n",
-		MCF5282_TIMER_DTER((DMA_TIMR)),
-		MCF5282_TIMER_DTCR((DMA_TIMR)));
+		MCF5282_TIMER_DTER((dtmr)),
+		MCF5282_TIMER_DTCR((dtmr)));
+	return 0;
 }
