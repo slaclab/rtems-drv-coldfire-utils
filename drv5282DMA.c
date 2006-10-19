@@ -6,12 +6,7 @@
 
 #include "coldfUtils.h"
 
-/* Hmm __IPSBAR is defined in the linker script :-( */
-
-#ifndef __IPSBAR
-#define __IPSBAR ((volatile uint8_t *)0x40000000)
-#endif
-          
+         
 /* Seems to be missing */
 #ifndef MCF5282_DMA_DCR_DSIZE_LINE
 #define MCF5282_DMA_DCR_DSIZE_LINE                      (0x00030000)

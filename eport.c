@@ -17,10 +17,16 @@ coldfEportIntDisable(int pin)
 void
 coldfEportIntEnable(int pin)
 {
-	coldfEportIntDisable_inl(pin);
+	coldfEportIntEnable_inl(pin);
 }
 
-#define BITCHECK(bit) do { if ( bit < 1 || bit > 7 ) return -1; } while (0)
+#define BITCHECK(bit) do { if ( (bit) < 1 || (bit) > 7 ) return -1; } while (0)
+
+#define MSKCHECK(msk,bit) \
+	do { \
+		if ( (bit) < 0 || (bit) > 7 ) return -1; \
+		msk = (bit) ? (1<<(bit)) : 0xfe; \
+	} while (0)
 
 int
 coldfEportEpdrToggle(int bit)
@@ -97,4 +103,44 @@ unsigned bits = 0; /* keep compiler happy */
 	rtems_interrupt_enable(flags);
 
 	return 0;
+}
+
+int
+coldfEportFlagGet(int pin)
+{
+unsigned char msk;
+
+	MSKCHECK(msk,pin);
+
+	return (MCF5282_EPORT_EPFR & msk);
+}
+
+/* Clear flag register bit (returns pre-clear status) */
+int
+coldfEportFlagClr(int pin)
+{
+int           rval;
+uint32_t      flags;
+unsigned char msk;
+
+	MSKCHECK(msk, pin);
+
+	rtems_interrupt_disable(flags);
+		rval = MCF5282_EPORT_EPFR & msk;
+		/* only clear if it was set otherwise we might miss an event */
+		if ( rval )
+			MCF5282_EPORT_EPFR = rval;
+	rtems_interrupt_enable(flags);
+
+	return rval;
+}
+
+int
+coldfEportEppdrGet(int pin)
+{
+unsigned char msk;
+
+	MSKCHECK(msk,pin);
+
+	return (MCF5282_EPORT_EPPDR & msk);
 }
