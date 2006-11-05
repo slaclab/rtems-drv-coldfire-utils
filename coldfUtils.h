@@ -114,6 +114,18 @@ coldfDMADump(int chan, int timer);
 int
 coldfCsSetup(int cs, uint32_t flags);
 
+/* Read/Write the FEC's MII registers */
+
+int
+getMII(int phyNumber, int regNumber);
+
+/*
+ * Write MII register
+ * Busy-waits, but transfer time should be short!
+ */
+void
+setMII(int phyNumber, int regNumber, int value);
+
 #ifdef __cplusplus
 }
 #endif

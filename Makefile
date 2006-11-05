@@ -10,7 +10,7 @@ LIBNAME=libcoldfUtils.a        # xxx- your library names goes here
 LIB=${ARCH}/${LIBNAME}
 
 # C and C++ source names, if any, go here -- minus the .c or .cc
-C_PIECES=eport drv5282DMA cselect
+C_PIECES=eport drv5282DMA cselect fecmii
 C_FILES=$(C_PIECES:%=%.c)
 C_O_FILES=$(C_PIECES:%=${ARCH}/%.o)
 
