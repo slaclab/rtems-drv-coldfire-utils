@@ -45,20 +45,26 @@ int level;
         rtems_interrupt_enable(level);
 }
 
-static inline void
+static inline int
 coldfEportIntDisable_inl(int pin)
 {
 int level;
+int rval;
         rtems_interrupt_disable(level);
+		rval = (MCF5282_EPORT_EPIER & (MCF5282_EPORT_EPIER_EPIE(pin)));
         MCF5282_EPORT_EPIER &= ~(MCF5282_EPORT_EPIER_EPIE(pin));
         rtems_interrupt_enable(level);
+
+		return rval;
 }
 
 /* extern versions [pin = 1..7] */
+
 void
 coldfEportIntEnable(int pin);
 
-void
+/* Disable interrupt and return previous status of mask */
+int
 coldfEportIntDisable(int pin);
 
 /* Toggle a bit [pin = 1..7] */

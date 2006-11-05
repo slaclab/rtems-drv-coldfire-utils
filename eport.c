@@ -8,16 +8,16 @@
 
 #include "coldfUtils.h"
 
-void
+int
 coldfEportIntDisable(int pin)
 {
-	coldfEportIntDisable_inl(pin);
+	return coldfEportIntDisable_inl(pin);
 }
 
 void
 coldfEportIntEnable(int pin)
 {
-	coldfEportIntEnable_inl(pin);
+	return coldfEportIntEnable_inl(pin);
 }
 
 #define BITCHECK(bit) do { if ( (bit) < 1 || (bit) > 7 ) return -1; } while (0)
