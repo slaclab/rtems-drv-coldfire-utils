@@ -18,7 +18,7 @@
 extern "C" {
 #endif
 
-/* EPORT */
+/* ============== EPORT ============== */
 
 /* EPORT interrupts, pin configuration & the like */
 
@@ -89,7 +89,7 @@ coldfEportFlagGet(int pin);
 int
 coldfEportFlagClr(int pin);
 
-/* DMA */
+/* =============== DMA =============== */
 
 /* DMA Transfer : WARNING -- this is work in progress and the API might change */
 
@@ -102,7 +102,7 @@ coldfDMAStart(int chan, uint8_t *to, uint8_t *from, uint32_t size, int ext, int 
 int
 coldfDMADump(int chan, int timer);
 
-/* CHIP SELECT CONFIGURATION */
+/* ==== CHIP SELECT CONFIGURATION ==== */
 
 #define CSELECT_FLAG_OFF	((uint32_t)-1)	/* disable this CS            */
 #define CSELECT_FLAG_BWEN	(1<<3)		/* enable burst writes        */
@@ -114,7 +114,9 @@ coldfDMADump(int chan, int timer);
 int
 coldfCsSetup(int cs, uint32_t flags);
 
-/* Read/Write the FEC's MII registers */
+/* ============= FEC PHY ============= */
+
+/* Read/Write the FEC's MII registers  */
 
 int
 getMII(int phyNumber, int regNumber);
@@ -125,6 +127,121 @@ getMII(int phyNumber, int regNumber);
  */
 void
 setMII(int phyNumber, int regNumber, int value);
+
+/* ============== QSPI =============== */
+/* NOTE: All access to the hardware is protected by an internal
+ *       mutex. Hence, it is safe for multiple threads sharing a
+ *       common setup to use the driver 'concurrently'. The mutex
+ *       serializes 'Write' and 'WriteRead' calls.
+ *
+ *       Note that 'Write' doesn't wait for the SPI transaction
+ *       to finish while 'WriteRead' does.
+ *
+ *       After a 'Write' operation, the driver keeps the mutex
+ *       until completion so that a second 'Write' blocks until
+ *       the first one has completed.
+ */
+
+/* Initialize the driver */
+int
+coldfQspiInit();
+
+/* Setup the QSPI interface
+ *
+ * 'sysclock': system clock in Hz (e.g., 64000000)
+ * 'baudrate': QSPI clock rate in Hz
+ *
+ *   setup_ns: delay from CS activation to active clock edge (in ns)
+ *             NOTE: value of zero selects default of 1/2 QSPI clock period
+ *
+ *    hold_ns: delay after CS deactivation until next transfer (in ns)
+ *             NOTE: value of zero selects default of 17/sysclock
+ *                   which is the lowest possible value.
+ *
+ *      flags: ORed options:
+ *                 CLK_ACTVLOW: active clock level is the low level.
+ *                 CLK_FALLING: data is latched on the active->inactive transition of
+ *                              the clock and changed on the inactive->active transition.
+ *                  CS_ACTVLOW: CS is driven high between transfers.
+ */
+
+/* Clock active low */
+#define DRV5282_QSPI_SETUP_CLK_ACTVLOW	1
+/* Data latched on falling edge (i.e., clock active->inactive transition) */
+#define DRV5282_QSPI_SETUP_CLK_FALLING	2
+#define DRV5282_QSPI_SETUP_CS_ACTVLOW	4
+
+int
+coldfQspiSetup(
+	uint32_t sysclock,
+	uint32_t baudrate,
+	uint32_t setup_ns,
+	uint32_t hold_ns,
+	uint32_t flags);
+
+
+/* Write 'n' bytes to TX RAM and issue command. This also
+ * clocks data into the RX RAM (which is retrieved by separate
+ * command).
+ *
+ * All bytes go the same (set) of devices (chip-selects).
+ *
+ * 'cs_mask' reflects the values driven on the CS lines
+ * during the transaction. The 'inactive' state is programmed
+ * by the 'Setup' routine.
+ *
+ * RETURNS: # bytes written or <0 on error
+ *
+ * NOTE:    The driver mutex is eventually released by the ISR
+ *          when the transaction is complete but the 'Write'
+ *          routine does not wait for that to happen.
+ *          You can explicitely synchronize either by calling
+ *          the 'Status' routine (which waits until it gets
+ *          the mutex) or by using the 'WriteRead' entry point.
+ */
+int
+coldfQspiWrite(uint8_t *buf, int n, uint16_t cs_mask);
+
+/* Read and clear status
+ *
+ * RETURNS: 
+ *    0   after successful transfer
+ *    QIR status flags on transfer error
+ *   -1   if status was clear (xfer completed flag not set)
+ */
+int
+coldfQspiStatus();
+
+/* Read n bytes from 'offset' out of RX RAM.
+ * This routine does not perform any actual
+ * transfer on the SPI but just reads data
+ * (non-destructively) from the RX buffer.
+ * 
+ * RETURNS: # bytes read or <0 on error:
+ */
+int
+coldfQspiRead(uint8_t *buf, unsigned offset, int n);
+
+/* Write a buffer (see coldfQspiWrite), wait for the transfer
+ * to complete and read received data (see coldfQspiRead).
+ * All actions are performed 'atomically' (protected by the driver mutex).
+ *
+ * NOTES: 'rbuf' may be equal to 'tbuf' or it may be NULL (in which case
+ *        received data is thrown away - this is effectively a synchronous
+ *        write operation).
+ *    
+ * RETURNS: # of bytes transferred or < 0 on error
+ *
+ * 			                      -1: parameter error
+ * 		    -QspiStatus return value: transmission error or abort
+ */
+int
+coldfQspiWriteRead(uint8_t *tbuf, uint8_t *rbuf, int n, uint16_t cs_mask);
+
+/* Shut down the driver  */
+int
+coldfQspiCleanup();
+
 
 #ifdef __cplusplus
 }

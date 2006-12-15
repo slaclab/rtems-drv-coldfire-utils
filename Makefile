@@ -10,7 +10,7 @@ LIBNAME=libcoldfUtils.a        # xxx- your library names goes here
 LIB=${ARCH}/${LIBNAME}
 
 # C and C++ source names, if any, go here -- minus the .c or .cc
-C_PIECES=eport drv5282DMA cselect fecmii
+C_PIECES=eport drv5282DMA cselect fecmii drv5282QSPI
 C_FILES=$(C_PIECES:%=%.c)
 C_O_FILES=$(C_PIECES:%=${ARCH}/%.o)
 
@@ -38,7 +38,7 @@ include $(RTEMS_ROOT)/make/lib.cfg
 #
 
 DEFINES  +=
-CPPFLAGS +=
+CPPFLAGS += -I.
 # inline declarations require -O
 CFLAGS   += -Winline
 
