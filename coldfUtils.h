@@ -89,6 +89,17 @@ coldfEportFlagGet(int pin);
 int
 coldfEportFlagClr(int pin);
 
+/* =============== IRQ =============== */
+
+/* A simple ISR that can be used for testing
+ * (install/remove using BSP_installVME_isr(vector, isr, uarg)
+ * It prints the user arg and vector number to
+ * the console and disables the interrupt at the controller
+ * (user BSP_enable_irq_at_pic() to re-enable).
+ */
+void
+coldfTestISR(void *uarg, unsigned long vector);
+
 /* =============== DMA =============== */
 
 /* DMA Transfer : WARNING -- this is work in progress and the API might change */
@@ -229,6 +240,8 @@ coldfQspiRead(uint8_t *buf, unsigned offset, int n);
  * NOTES: 'rbuf' may be equal to 'tbuf' or it may be NULL (in which case
  *        received data is thrown away - this is effectively a synchronous
  *        write operation).
+ *        'tbuf' may also be NULL which makes this effectively a synchronous
+ *        read operation.
  *    
  * RETURNS: # of bytes transferred or < 0 on error
  *

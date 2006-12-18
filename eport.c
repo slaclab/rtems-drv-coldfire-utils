@@ -6,7 +6,8 @@
 
 /* enable/disable   */
 
-#include "coldfUtils.h"
+#include <coldfUtils.h>
+#include <rtems/bspIo.h>
 
 int
 coldfEportIntDisable(int pin)
@@ -143,4 +144,14 @@ unsigned char msk;
 	MSKCHECK(msk,pin);
 
 	return (MCF5282_EPORT_EPPDR & msk);
+}
+
+extern void BSP_disable_irq_at_pic();
+
+void
+coldfTestISR(void *uarg, unsigned long v)
+{
+	printk("IRQ (vector %i, user arg 0x%08x)\n", v, uarg);
+	printk("Calling BSP_disable_irq_at_pic(vector) now.\n");
+	BSP_disable_irq_at_pic(v);
 }

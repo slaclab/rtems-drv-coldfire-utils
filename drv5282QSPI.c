@@ -70,9 +70,11 @@ uint16_t          dly;
 	cmd     = cs_mask | MCF5282_QSPI_QCR_CONT;
 
 	/* write data */
-	MCF5282_QSPI_QAR = 0;
-	for ( i=0; i<n; i++) {
-		MCF5282_QSPI_QDR = *buf++;
+	if ( buf ) {
+		MCF5282_QSPI_QAR = 0;
+		for ( i=0; i<n; i++) {
+			MCF5282_QSPI_QDR = *buf++;
+		}
 	}
 
 	n--;
@@ -356,6 +358,11 @@ int
 coldfQspiCleanup()
 {
 rtems_status_code sc;
+
+	/* was maybe never used / initialized */
+	if ( !mutex )
+		return 0;
+
 	QSPI_LOCK();
 
 	/* Make sure the thing is stopped */
@@ -384,21 +391,4 @@ rtems_status_code sc;
 	}
 
 	return 0;
-}
-
-void
-_cexpModuleInitialize(void* unused)
-{
-	if ( coldfQspiInit(0) ) {
-		printf("QSPI INIT failed\n");
-	} else {
-		if ( coldfQspiSetup(66666666,100000,0,0,1) )
-			printf("QSPI SETUP failed\n");
-	}
-}
-
-int
-_cexpModuleFinalize(void* unused)
-{
-	return coldfQspiCleanup();
 }

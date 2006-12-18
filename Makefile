@@ -8,9 +8,11 @@
 
 LIBNAME=libcoldfUtils.a        # xxx- your library names goes here
 LIB=${ARCH}/${LIBNAME}
+PGMS=${ARCH}/coldfUtils.obj
 
 # C and C++ source names, if any, go here -- minus the .c or .cc
 C_PIECES=eport drv5282DMA cselect fecmii drv5282QSPI
+C_PIECES+=coldfUtils.modini
 C_FILES=$(C_PIECES:%=%.c)
 C_O_FILES=$(C_PIECES:%=${ARCH}/%.o)
 
@@ -40,7 +42,7 @@ include $(RTEMS_ROOT)/make/lib.cfg
 DEFINES  +=
 CPPFLAGS += -I.
 # inline declarations require -O
-CFLAGS   += -Winline
+CFLAGS   += -Winline -D__IPSBAR=__IPSBAR
 
 #
 # Add your list of files to delete here.  The config files
@@ -52,7 +54,16 @@ CFLAGS   += -Winline
 CLEAN_ADDITIONS +=
 CLOBBER_ADDITIONS +=
 
-all:	${ARCH} $(SRCS) $(LIB)
+all:	${ARCH} $(SRCS) $(PGMS) $(LIB)
+
+#
+# doesn't work if we define this just after OBJS= :-(
+# must be after inclusion of RTEMS_CUSTOM
+$(LIB): OBJS:=$(filter-out %.modini.o,$(OBJS))
+
+#How to make a relocatable object
+$(filter %.obj, $(PGMS)): ${OBJS}
+	$(make-obj)
 
 $(LIB): ${OBJS}
 	$(make-library)
@@ -67,8 +78,9 @@ ${RTEMS_SITE_INSTALLDIR}/include/bsp:
 
 # Install the library, appending _g or _p as appropriate.
 # for include files, just use $(INSTALL_CHANGE)
-install:  all ${RTEMS_SITE_INSTALLDIR}/lib ${RTEMS_SITE_INSTALLDIR}/include/bsp/
+install:  all ${RTEMS_SITE_INSTALLDIR}/lib $(RTEMS_SITE_INSTALLDIR)/bin ${RTEMS_SITE_INSTALLDIR}/include/bsp/
 	$(INSTALL_VARIANT) -m 644 ${LIB} ${RTEMS_SITE_INSTALLDIR}/lib/
+	$(INSTALL_VARIANT) -m 644 ${PGMS} ${RTEMS_SITE_INSTALLDIR}/bin/
 	$(INSTALL_CHANGE) -m 644 ${H_FILES} ${RTEMS_SITE_INSTALLDIR}/include/bsp/
 
 REVISION=$(filter-out $$%,$$Name$$)
