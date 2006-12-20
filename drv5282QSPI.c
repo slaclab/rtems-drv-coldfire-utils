@@ -186,6 +186,12 @@ coldfQspiSetup(uint32_t sysclock, uint32_t baud, uint32_t setup_ns, uint32_t hol
 {
 uint16_t	mode = MCF5282_QSPI_QMR_BITS_8 | MCF5282_QSPI_QMR_MSTR;
 
+	if ( 0 == sysclock ) {
+		if ( 0 == ( sysclock = bsp_get_CPU_clock_speed() ) ) {
+			return -1;
+		}
+	}
+
 	if ( setup_ns ) {
 		/* Convert ns to clock ticks */
 		setup_ns *= (sysclock/10000);
@@ -275,13 +281,25 @@ rtems_status_code sc;
 	mode |= MCF5282_GPIO_PQSPAR_PQSPA5;
 	mode |= MCF5282_GPIO_PQSPAR_PQSPA6;
 
-	MCF5282_GPIO_PQSPAR = mode;
+	if ( !mutex ) {
+		/* Do only once */
+		MCF5282_GPIO_PQSPAR = mode;
+	}
+
+	if ( mutex ) {
+		QSPI_LOCK();
+	}
 
 	/* Make sure the thing is stopped */
 	MCF5282_QSPI_QDLYR &= ~MCF5282_QSPI_QDLYR_SPE;
 
 	/* Make sure interrupts are cleared */
 	MCF5282_QSPI_QIR = IRQFLAGS;
+
+	if ( mutex ) {
+		QSPI_UNLOCK();
+		return 0;
+	}
 
 	sc = rtems_semaphore_create(
 			rtems_build_name('s','p','i','m'), 

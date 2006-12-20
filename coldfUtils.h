@@ -160,6 +160,10 @@ coldfQspiInit();
 /* Setup the QSPI interface
  *
  * 'sysclock': system clock in Hz (e.g., 64000000)
+ *             NOTE: if 0 is passed then the routine will try to
+ *             determine the clock speed automatically (returns nonzero
+ *             if that fails).
+ *
  * 'baudrate': QSPI clock rate in Hz
  *
  *   setup_ns: delay from CS activation to active clock edge (in ns)
