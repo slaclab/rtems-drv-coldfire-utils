@@ -1,4 +1,3 @@
-		case 0:
 #include <rtems.h>
 
 #include <mcf5282/mcf5282.h>
