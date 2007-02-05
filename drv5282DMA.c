@@ -1,3 +1,4 @@
+		case 0:
 #include <rtems.h>
 
 #include <mcf5282/mcf5282.h>
@@ -38,7 +39,7 @@ coldfDMATimerSetup(int chan, int dtmr)
 
 	if ( 0 == dtmr ) {
 		/* configure input pin */
-		MCF5282_GPIO_PTDPAR  = MCF5282_GPIO_PTDPAR_PTDPA1(3);
+		MCF5282_GPIO_PTDPAR |= MCF5282_GPIO_PTDPAR_PTDPA1(3);
 	} else {
 		fprintf(stderr,"Setup for DMA timers other than 0 not implemented yet\n");
 		fprintf(stderr,"Please add code to assign DTINxx pin\n");
