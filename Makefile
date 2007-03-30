@@ -11,7 +11,7 @@ LIB=${ARCH}/${LIBNAME}
 PGMS=${ARCH}/coldfUtils.obj
 
 # C and C++ source names, if any, go here -- minus the .c or .cc
-C_PIECES=eport drv5282DMA cselect fecmii drv5282QSPI
+C_PIECES=eport drv5282DMA cselect fecmii drv5282QSPI flash
 C_PIECES+=coldfUtils.modini
 C_FILES=$(C_PIECES:%=%.c)
 C_O_FILES=$(C_PIECES:%=${ARCH}/%.o)
