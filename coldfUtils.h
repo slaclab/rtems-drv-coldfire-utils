@@ -259,6 +259,21 @@ coldfQspiWriteRead(uint8_t *tbuf, uint8_t *rbuf, int n, uint16_t cs_mask);
 int
 coldfQspiCleanup();
 
+/* Copy contents of a file to flash.
+ *
+ * 'fname': Path of a file.
+ *
+ * NOTES: Convenience wrapper around BSP_flashWrite(); see above for
+ *        args and return value.
+ *
+ * 'bank'   is unused (compatibility with other BSPs).
+ * 'offset' should be 0 for a boot image.
+ *
+ * RETURNS: 0 on success, nonzero on error.
+ */
+int
+BSP_flashWriteFile(int bank, uint32_t offset, char *path);
+
 
 #ifdef __cplusplus
 }
