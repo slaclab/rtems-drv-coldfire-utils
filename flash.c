@@ -141,30 +141,36 @@ crc32_mem(uint8_t *buf, int len)
 	return crc32_red(crc32_acc(0, buf,len),len);
 }
 
+/* We could improve this by not storing the entire file in an intermediate
+ * buffer but only reading/writing a block at a time.
+ */
+
 int
-BSP_flashWriteFile(int bank, uint32_t offset, char *fname)
+BSP_flashWriteFile_1(int bank, uint32_t offset, char *fname, int quiet)
 {
 FILE   *f = 0;
 int  rval = -1;
 chain_t	chain = 0;
-int  i,blk,siz,got,dot;
+int  i,blk,siz,got,dot = 0;
 uint32_t crc32val = 0;
 uint32_t crcafter = 0;
 
 	if ( !(f = fopen(fname,"r")) ) {
-		perror("fopen");
+		if ( quiet < 3 ) perror("fopen");
 		return -1;
 	}
 
 	if ( !(chain = calloc(CHAINL, sizeof(*chain))) ) {
-		perror("calloc");
+		if ( quiet < 3 ) perror("calloc");
 		goto bail;
 	}
 
 	blk = -1;
 
-	dot = printf("Downloading..");
-	rtems_task_wake_after(10);
+	if ( quiet < 2 ) {
+		dot = printf("Downloading..");
+		rtems_task_wake_after(10);
+	}
 
 	siz = got = 0;
 	do {
@@ -173,30 +179,32 @@ uint32_t crcafter = 0;
 		/* first call doesn't do anything since 'got' is zero */
 		crc32val = crc32_acc(crc32val, *chain[blk], got);
 
-		if ( ++dot % 64 == 0 ) {
-			fputc('\n',stdout);
-		} else {
-			fputc('.', stdout); fflush(stdout);
+		if ( quiet < 2 ) {
+			if ( ++dot % 64 == 0 ) {
+				fputc('\n',stdout);
+			} else {
+				fputc('.', stdout); fflush(stdout);
+			}
 		}
 
 		if ( ++blk >= CHAINL ) {
-			fprintf(stderr,"File too big\n");
+			if ( quiet < 3 ) fprintf(stderr,"File too big\n");
 			goto bail;
 		}
 
 
 		if ( !(chain[blk] = malloc(sizeof(*chain[blk]))) ) {
-			perror("malloc(BLKSIZE)");
+			if ( quiet < 3 ) perror("malloc(BLKSIZE)");
 			goto bail;
 		}
 	} while ( BLKSIZE == (got = fread(chain[blk], sizeof(uint8_t), BLKSIZE, f)) );
 
 	if ( ferror(f) ) {
-		perror("\nreading from file");
+		if ( quiet < 3 ) perror("\nreading from file");
 		goto bail;
 	}
 
-	printf("done\n");
+	if ( quiet < 2 ) printf("done\n");
 
 	crc32val = crc32_acc(crc32val, *chain[blk], got);
 
@@ -204,20 +212,25 @@ uint32_t crcafter = 0;
 
 	crc32val = crc32_red(crc32val, siz);
 
-	printf("\nPosix 'cksum' of file was 0x%08lx (%lu)\n\n", crc32val, crc32val);
+	if ( quiet < 2 ) {
+		printf("\nPosix 'cksum' of file was 0x%08lx (%lu)\n\n", crc32val, crc32val);
 
-	printf("OK to proceed ERASING + PROGRAMMING flash ? y/[n]");
-	fflush(stdout);
-	if ( '\n' != (i = toupper(getchar())) ) {
-		/* skip to EOL assuming they have line-buffered input */
-		while ( '\n' != getchar() )
-			;
-	}
-	fputc('\n',stdout);
+		/* Ask only in interactive mode (quiet < 1 ) */
+		if ( quiet < 1 ) {
+			printf("OK to proceed ERASING + PROGRAMMING flash ? y/[n]");
+			fflush(stdout);
+			if ( '\n' != (i = toupper(getchar())) ) {
+				/* skip to EOL assuming they have line-buffered input */
+				while ( '\n' != getchar() )
+					;
+			}
+			fputc('\n',stdout);
 
-	if ( 'Y' != i ) {
-		fprintf(stderr,"ABORTED; flash NOT programmed\n");
-		goto bail;
+			if ( 'Y' != i ) {
+				fprintf(stderr,"ABORTED; flash NOT programmed\n");
+				goto bail;
+			}
+		}
 	}
 
 #ifdef __rtems__
@@ -231,26 +244,37 @@ uint32_t crcafter = 0;
 			goto bail;
 		}
 #else
-		printf("Erasing..."); fflush(stdout);
-		rtems_task_wake_after(10);
+		if ( quiet < 2 ) {
+			printf("Erasing..."); fflush(stdout);
+			rtems_task_wake_after(10);
+		}
 		if ( bsp_flash_erase_range( FLASHSTART, offset, offset + siz-1 ) ) {
-			fprintf(stderr,"\n*** Erasing error (contents may be corrupted) ***\n");
+			if ( quiet < 3 )
+				fprintf(stderr,"\n*** Erasing error (contents may be corrupted) ***\n");
 			goto bail;
 		}
-		printf("done\nWriting..."); fflush(stdout);
-		rtems_task_wake_after(10);
+
+		if ( quiet < 2 ) {
+			printf("done\nWriting..."); fflush(stdout);
+			rtems_task_wake_after(10);
+		}
 		if ( bsp_flash_write_range( FLASHSTART, &nod, offset) ) {
-			fprintf(stderr,"\n*** Erasing error (contents may be corrupted) ***\n");
+			if ( quiet < 3 )
+				fprintf(stderr,"\n*** Erasing error (contents may be corrupted) ***\n");
 			goto bail;
 		}
-		printf("done\n");
-		printf("Verifying Checksum..."); fflush(stdout);
-		rtems_task_wake_after(10);
+		if ( quiet < 2 ) {
+			printf("done\n");
+			printf("Verifying Checksum..."); fflush(stdout);
+			rtems_task_wake_after(10);
+		}
 		crcafter = crc32_mem(((uint8_t*)FLASHSTART) + offset, siz);
 		if ( crcafter == crc32val ) {
-			printf("done\nPASSED\n");
+			if ( quiet < 2 )
+				printf("done\nPASSED\n");
 		} else {
-			printf("CHECKSUM MISMATCH 'cksum' of flash is 0x%08lx (%lu)\n", crcafter, crcafter);
+			if ( quiet < 3 )
+				printf("CHECKSUM MISMATCH 'cksum' of flash is 0x%08lx (%lu)\n", crcafter, crcafter);
 			goto bail;
 		}
 #endif
@@ -258,7 +282,7 @@ uint32_t crcafter = 0;
 #else
 	printf("Would program now...\n");
 #endif
-	rval = siz;
+	rval = 0;
 
 bail:
 	if ( f )
@@ -272,6 +296,13 @@ bail:
 	return rval;
 }
 
+/* Semantics of beatnik routine */
+int
+BSP_flashWriteFile(int bank, uint32_t offset, char *fname)
+{
+int quiet = isatty(fileno(stdin)) ? 0 : 3;
+	return BSP_flashWriteFile_1(bank, offset, fname, quiet);
+}
 
 #ifndef __rtems__
 
@@ -304,7 +335,7 @@ uint32_t crc32val;
 	crc32val = crc32_accf(f);
 	fclose(f);
 	printf("Posix 'cksum' of file (1st way) 0x%08x (%u)\n", crc32val, crc32val);
-	printf("Read %i bytes\n", BSP_flashWriteFile(argv[1]));
+	printf("Returned %i\n", BSP_flashWriteFile(argv[1]));
 	return 0;
 }
 #endif

@@ -261,11 +261,7 @@ coldfQspiCleanup();
 
 /* Copy contents of a file to flash.
  *
- * 'fname': Path of a file.
- *
- * NOTES: Convenience wrapper around BSP_flashWrite(); see above for
- *        args and return value.
- *
+ * 'path'   Path of a file.
  * 'bank'   is unused (compatibility with other BSPs).
  * 'offset' should be 0 for a boot image.
  *
@@ -273,6 +269,16 @@ coldfQspiCleanup();
  */
 int
 BSP_flashWriteFile(int bank, uint32_t offset, char *path);
+
+/* alternate entry point:
+ * 'quiet': 0 all messages printed, ask for confirmation
+ *          before erasing.
+ * 'quiet': 1 all messages printed, no questions asked
+ * 'quiet': 2 only error messages printed, no questions asked
+ * 'quiet': 3 no messages printed, no questions asked
+ */
+int
+BSP_flashWriteFile_1(int bank, uint32_t offset, char *path, int quiet);
 
 
 #ifdef __cplusplus
