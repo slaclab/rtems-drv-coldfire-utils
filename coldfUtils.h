@@ -102,10 +102,149 @@ coldfTestISR(void *uarg, unsigned long vector);
 
 /* =============== DMA =============== */
 
-/* DMA Transfer : WARNING -- this is work in progress and the API might change */
+/*
+ * DMA Transfer : WARNING -- this is work in progress and the API might change
+ */
+
+/*
+ * The 'sync' flag can have the the following values
+ */
+
+/*
+ * DMA 'mode' flags:
+ */
+#define COLDF_DMA_MODE_CC_TO		(1<<0)
+	/* invalidate cache covering 'to' area    */
+#define COLDF_DMA_MODE_CC_FROM		(1<<1)
+	/* invalidate cache covering 'from' area  */
+#define COLDF_DMA_MODE_CC_MSK		(3<<0)
+	/* use external (HW) signal to start DMA; */
+#define COLDF_DMA_MODE_START_EXT	(MCF5282_DMA_DCR_EEXT)
+	/* start DMA immediately by software      */
+#define COLDF_DMA_MODE_START_INT	(MCF5282_DMA_DCR_START)
+	/* enable interrupt on completion or error (user still
+	 * must hook an ISR).
+	 */
+#define COLDF_DMA_MODE_SYNC_IRQ		(MCF5282_DMA_DCR_INT)
+	/* poll for DMA completion (mostly useful for timing/debugging) */
+#define COLDF_DMA_MODE_SYNC_POLL	(1<<2)
+	/* transfer from peripheral to memory (used to optimize port width etc)
+	 */
+#define COLDF_DMA_MODE_TOMEM		(1<<3)
+
+#define COLDF_DMA_MODE_TO_MEM  (0 \
+          /* | MCF5282_DMA_DCR_INT        */ \
+          /* | MCF5282_DMA_DCR_EEXT       */ \
+          /* | MCF5282_DMA_DCR_CS         */ \
+             | MCF5282_DMA_DCR_AA            \
+             | MCF5282_DMA_DCR_BWC_DMA       \
+          /* | MCF5282_DMA_DCR_BWC_512    */ \
+          /* | MCF5282_DMA_DCR_BWC_1024   */ \
+          /* | MCF5282_DMA_DCR_BWC_2048   */ \
+          /* | MCF5282_DMA_DCR_BWC_4096   */ \
+          /* | MCF5282_DMA_DCR_BWC_8192   */ \
+          /* | MCF5282_DMA_DCR_BWC_16384  */ \
+          /* | MCF5282_DMA_DCR_BWC_32768  */ \
+          /* | MCF5282_DMA_DCR_SINC       */ \
+          /* | MCF5282_DMA_DCR_SSIZE_LONG */ \
+          /* | MCF5282_DMA_DCR_SSIZE_BYTE */ \
+             | MCF5282_DMA_DCR_SSIZE_WORD    \
+          /* | MCF5282_DMA_DCR_SSIZE_LINE */ \
+             | MCF5282_DMA_DCR_DINC          \
+		  /* line is apparently slowest, LONG is best */ \
+		  /* | MCF5282_DMA_DCR_DSIZE_LINE */ \
+		     | MCF5282_DMA_DCR_DSIZE_LONG    \
+		  /* | MCF5282_DMA_DCR_DSIZE_BYTE */ \
+		  /* | MCF5282_DMA_DCR_DSIZE_WORD */ \
+		  /* | MCF5282_DMA_DCR_START      */ \
+		  | MCF5282_DMA_DCR_AT)
+
+#define COLDF_DMA_MODE_FROM_MEM  (0 \
+          /* | MCF5282_DMA_DCR_INT        */ \
+          /* | MCF5282_DMA_DCR_EEXT       */ \
+          /* | MCF5282_DMA_DCR_CS         */ \
+          | MCF5282_DMA_DCR_AA               \
+          | MCF5282_DMA_DCR_BWC_DMA          \
+          /* | MCF5282_DMA_DCR_BWC_512    */ \
+          /* | MCF5282_DMA_DCR_BWC_1024   */ \
+          /* | MCF5282_DMA_DCR_BWC_2048   */ \
+          /* | MCF5282_DMA_DCR_BWC_4096   */ \
+          /* | MCF5282_DMA_DCR_BWC_8192   */ \
+          /* | MCF5282_DMA_DCR_BWC_16384  */ \
+          /* | MCF5282_DMA_DCR_BWC_32768  */ \
+             | MCF5282_DMA_DCR_SINC          \
+          /* | MCF5282_DMA_DCR_SSIZE_LONG */ \
+          /* | MCF5282_DMA_DCR_SSIZE_BYTE */ \
+          /* | MCF5282_DMA_DCR_SSIZE_WORD */ \
+             | MCF5282_DMA_DCR_SSIZE_LINE    \
+          /* | MCF5282_DMA_DCR_DINC       */ \
+		  /* | MCF5282_DMA_DCR_DSIZE_LINE */ \
+		     | MCF5282_DMA_DCR_DSIZE_LONG    \
+		  /* | MCF5282_DMA_DCR_DSIZE_BYTE */ \
+		  /* | MCF5282_DMA_DCR_DSIZE_WORD */ \
+		  /* | MCF5282_DMA_DCR_START      */ \
+		  | MCF5282_DMA_DCR_AT)
+
+
+/* Increment source/destination pointer;
+ * NOTE: if TOMEM is set then DINC is automatically set;
+ *       if TOMEM is clear then SINC is automatically set.
+ * This flag only affects SINC (TOMEM set) or DINC (TOMEM clear),
+ * respectively.
+ */
+#define COLDF_DMA_MODE_SINC			(MCF5282_DMA_DCR_SINC)
+#define COLDF_DMA_MODE_DINC			(MCF5282_DMA_DCR_DINC)
+
+	/* strip all non-DCR flags -- INTERNAL USE ONLY */
+#define COLDF_DMA_MODE_MASK         (~0xf)
+
+/*
+ * mode can be a combination of flags above but it can
+ * also just be any combination of DMA/DCR flags.
+ */
+
+/*
+ * compute pre-cooked mode word from simple parameters
+ *
+ * 'ext'   nonzero: use external/HW start condition, (SW start otherwise)
+ * 'poll'  nonzero: poll for completion (poll>0) or enable irq (poll<0)
+ * 'tomem'     > 0: use combination of flags useful for xfer from
+ *                  periph. port to memory.
+ * 'tomem'    <= 0: use combination of flags useful for xfer from
+ *                  memory to periph. port.
+ * 'tomem'     > 1: as tomem==1 but DO increment source address.
+ * 'tomem'     < 0: as tomem==0 but DO increment dest address.
+ *
+ *                  NOTE: 'tomem == 1' does NOT increment the source address;
+ *                        'tomem == 0' does NOT increment the dest address.
+ *
+ * 'cache_coherency'
+ *               0: do not flush source nor invalidate destination from
+ *                  cache.
+ *              >0: IF (tomem>0) invalidate destination ELSE flush source
+ *              <0: flush source and invalidate destination from cache.
+ */
+uint32_t
+coldfDMAMode(int ext, int poll, int tomem, int cache_coherency);
 
 int
-coldfDMAStart(int chan, uint8_t *to, uint8_t *from, uint32_t size, int ext, int poll, int tomem, int cache_coherency);
+coldfDMAStart(int chan, uint8_t *to, uint8_t *from, uint32_t size, uint32_t mode);
+ 
+/*
+ * Obtain interrupt vector for DMA channel 'chan';
+ * -1 is returned if the channel number is out
+ * of range
+ */
+int
+coldfDMAIrqVector(int chan);
+
+/*
+ * Read status and reset 'DONE' if set.
+ * Returns nonzero of an error had occurred
+ * during the last DMA transfer.
+ */
+int
+coldfDMAAck(int chan);
 
 /* Dump raw registers of DMA channel (0..3) and DMA timer (0..3) to stdout
  * RETURNS: 0 on success, -1 (invalid argument)

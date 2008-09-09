@@ -111,8 +111,41 @@ coldfDMATimerSetup(int chan, int dtmr)
 		  /* | MCF5282_DMA_DCR_START      */ \
 		  | MCF5282_DMA_DCR_AT
 
+/* compute pre-cooked mode */
+uint32_t
+coldfDMAMode(int ext, int poll, int tomem, int cache_coherency)
+{
+uint32_t rval;
+
+	rval = tomem > 0 ? COLDF_DMA_MODE_TO_MEM : COLDF_DMA_MODE_FROM_MEM;
+
+	if ( tomem > 1 )
+		rval |= COLDF_DMA_MODE_SINC;
+	else if ( tomem < 0 )
+		rval |= COLDF_DMA_MODE_DINC;
+
+	if ( cache_coherency ) {
+		if ( cache_coherency < 0 )
+			rval |= COLDF_DMA_MODE_CC_TO | COLDF_DMA_MODE_CC_FROM;
+		else
+			rval |= tomem > 0 ? COLDF_DMA_MODE_CC_TO : COLDF_DMA_MODE_CC_FROM;
+	}
+
+	if ( poll > 0 )
+		rval |= COLDF_DMA_MODE_SYNC_POLL;
+	else if ( poll < 0 )
+		rval |= COLDF_DMA_MODE_SYNC_IRQ;
+
+	if ( ext )
+		rval |= COLDF_DMA_MODE_START_EXT;
+	else
+		rval |= COLDF_DMA_MODE_START_INT;
+		
+	return rval;
+}
+
 int
-coldfDMAStart(int chan, uint8_t *to, uint8_t *from, uint32_t size, int ext, int poll, int tomem, int cc)
+coldfDMAStart(int chan, uint8_t *to, uint8_t *from, uint32_t size, uint32_t mode)
 {
 #if defined(CACHE_DEBUG) || defined(TIMING_DEBUG)
 uint32_t now, then;
@@ -120,12 +153,14 @@ uint32_t now, then;
 uint32_t linesz  = rtems_cache_get_data_line_size();
 uint32_t linemsk = linesz - 1;
 uint32_t abeg,aend;
-int      rval;
+uint32_t dcr;
+uint32_t poll    = 0;
+int      rval    = 0;
 
 	CHANCHK(chan);
 
 
-	if ( cc ) {
+	if ( (mode & COLDF_DMA_MODE_CC_MSK) ) {
 		/* INVALIDATE/FLUSH CACHE */
 
 #ifdef CACHE_DEBUG
@@ -133,7 +168,7 @@ then = Read_timer();
 #endif
 
 	/* compute aligned beginning and end address */
-	if ( tomem ) {
+	if ( mode & COLDF_DMA_MODE_CC_TO ) {
 		abeg = (((uint32_t)to) + linemsk ) & ~linemsk;
 		aend = (((uint32_t)to) + size)     & ~linemsk;
 
@@ -148,7 +183,9 @@ then = Read_timer();
 
 		if ( aend > abeg )
 			rtems_cache_invalidate_multiple_data_lines((void*)abeg, aend-abeg);
-	} else {
+	}
+
+	if ( mode & COLDF_DMA_MODE_CC_FROM ) {
 		abeg = (((uint32_t)from))                   & ~linemsk;
 		aend = (((uint32_t)from) + size + linemsk ) & ~linemsk;
 		rtems_cache_flush_multiple_data_lines((void*)abeg, aend-abeg);
@@ -184,13 +221,22 @@ printf("Flushing %i bytes took %uus\n",aend-abeg,now-then);
 	 * DSIZE_LONG:  66us
 	 * DSIZE_WORD: 130us
 	 */
-	MCF5282_DMA_DCR((chan)) = (tomem ? DMA_BITS_TO_MEM : DMA_BITS_FROM_MEM) | (ext ? MCF5282_DMA_DCR_EEXT : MCF5282_DMA_DCR_START);
+ 
+	dcr  = ( mode & COLDF_DMA_MODE_MASK );
+
+	if ( ! (COLDF_DMA_MODE_START_EXT & mode) ) {
+		dcr |= MCF5282_DMA_DCR_START;
+		poll = (COLDF_DMA_MODE_SYNC_POLL & mode);
+	}
+
+	MCF5282_DMA_DCR((chan)) = dcr;
 
 	/* POLL FOR TERMINATION */
 
-	if ( !ext && poll ) {
+	if ( poll ) {
 		while ( ! (MCF5282_DMA_DSR((chan)) & MCF5282_DMA_DSR_DONE) )
 			/* Poll */;
+		rval = (uint8_t)(MCF5282_DMA_DSR((chan)) & ~MCF5282_DMA_DSR_DONE);
 	}
 
 #ifdef TIMING_DEBUG
@@ -198,9 +244,36 @@ printf("Flushing %i bytes took %uus\n",aend-abeg,now-then);
 	printf("DMA took %uus\n",now-then);
 #endif
 
-	rval = (uint8_t)MCF5282_DMA_DSR((chan));
+	return rval;
+}
 
-	return ( 0 == (rval & ~ MCF5282_DMA_DSR_DONE) ) ? 0 : rval;
+/*
+ * Obtain interrupt vector for DMA channel 'chan';
+ * -1 is returned if the channel number is out
+ * of range
+ */
+int
+coldfDMAIrqVector(int chan)
+{
+	if ( chan < 0 || chan > 3 )
+		return -1;
+	return 9+chan;
+}
+
+/*
+ * Read status and reset 'DONE' if set.
+ * Returns nonzero of an error had occurred
+ * during the last DMA transfer.
+ */
+int
+coldfDMAAck(int chan)
+{
+int rval = (uint8_t)MCF5282_DMA_DSR((chan));
+	if ( MCF5282_DMA_DSR_DONE & rval ) {
+		MCF5282_DMA_DSR((chan)) = MCF5282_DMA_DSR_DONE;
+		rval &= ~MCF5282_DMA_DSR_DONE;
+	}
+	return rval;
 }
 
 int
