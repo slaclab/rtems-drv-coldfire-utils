@@ -63,25 +63,31 @@ $(LIB): OBJS:=$(filter-out %.modini.o,$(OBJS))
 
 #How to make a relocatable object
 $(filter %.obj, $(PGMS)): ${OBJS}
-	$(make-obj)
+	$(make-rel)
 
 $(LIB): ${OBJS}
 	$(make-library)
 
 ifndef RTEMS_SITE_INSTALLDIR
 RTEMS_SITE_INSTALLDIR = $(PROJECT_RELEASE)
+RTEMS_SITE_INCINSTDIR = $(PROJECT_RELEASE)/lib/include
+else
+ifndef RTEMS_SITE_INCINSTDIR
+RTEMS_SITE_INCINSTDIR = $(RTEMS_SITE_INSTALLDIR)/include
+endif
 endif
 
+
 ${RTEMS_SITE_INSTALLDIR}/lib \
-${RTEMS_SITE_INSTALLDIR}/include/bsp:
+${RTEMS_SITE_INCINSTDIR}/bsp:
 	test -d $@ || mkdir -p $@
 
 # Install the library, appending _g or _p as appropriate.
 # for include files, just use $(INSTALL_CHANGE)
-install:  all ${RTEMS_SITE_INSTALLDIR}/lib $(RTEMS_SITE_INSTALLDIR)/bin ${RTEMS_SITE_INSTALLDIR}/include/bsp/
+install:  all ${RTEMS_SITE_INSTALLDIR}/lib $(RTEMS_SITE_INSTALLDIR)/bin ${RTEMS_SITE_INCINSTDIR}/bsp/
 	$(INSTALL_VARIANT) -m 644 ${LIB} ${RTEMS_SITE_INSTALLDIR}/lib/
 	$(INSTALL_VARIANT) -m 644 ${PGMS} ${RTEMS_SITE_INSTALLDIR}/bin/
-	$(INSTALL_CHANGE) -m 644 ${H_FILES} ${RTEMS_SITE_INSTALLDIR}/include/bsp/
+	$(INSTALL_CHANGE) -m 644 ${H_FILES} ${RTEMS_SITE_INCINSTDIR}/bsp/
 
 REVISION=$(filter-out $$%,$$Name$$)
 tar:
