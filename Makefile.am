@@ -3,7 +3,7 @@ AUTOMAKE_OPTIONS=foreign
 
 include $(top_srcdir)/rtems-pre.am
 
-EXEEXT=$(OBJEXEEEXT)
+EXEEXT=$(OBJEXEEXT)
 
 libcoldfUtils_a_SOURCES       = eport.c drv5282DMA.c cselect.c fecmii.c drv5282QSPI.c flash.c
 
