@@ -6,6 +6,10 @@
 
 #include "coldfUtils.h"
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
          
 /* Seems to be missing */
 #ifndef MCF5282_DMA_DCR_DSIZE_LINE
@@ -19,8 +23,15 @@
 #define DMA_CHNL 0
 #define DMA_TIMR 0
 
+#if RTEMS_VERSION_ATLEAST(4,9,0)
+extern void     benchmark_timer_initialize();
+extern uint32_t benchmark_timer_read();
+#define Timer_initialize benchmark_timer_initialize
+#define Read_timer       benchmark_timer_read
+#else
 extern void Timer_initialize();
 extern uint32_t Read_timer();
+#endif
 
 /* I'm not a fan of those macros...
  * Note that e.g., MCF5282_EPDR_EPD(bit) doesn't protect 'bit' in the
