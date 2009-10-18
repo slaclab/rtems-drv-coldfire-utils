@@ -1,0 +1,5 @@
+2009/10/17 (T.S.)
+
+	* drv5282QSPI.c: must use a binary (not simple binary) semaphore
+	for mutex - otherwise there is no priority inheritance and creation
+	fails under 4.10.

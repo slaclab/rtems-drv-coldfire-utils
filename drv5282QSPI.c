@@ -304,7 +304,7 @@ rtems_status_code sc;
 	sc = rtems_semaphore_create(
 			rtems_build_name('s','p','i','m'), 
 			1,
-			RTEMS_SIMPLE_BINARY_SEMAPHORE | RTEMS_PRIORITY | RTEMS_INHERIT_PRIORITY,
+			RTEMS_BINARY_SEMAPHORE | RTEMS_PRIORITY | RTEMS_INHERIT_PRIORITY,
 			0,
 			&mutex);
 	if ( RTEMS_SUCCESSFUL != sc ) {
