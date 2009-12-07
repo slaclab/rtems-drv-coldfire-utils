@@ -1,3 +1,7 @@
+2009/12/07 (T.S.)
+
+	* drv5282DMA.c: fixed compiler warnings (print formats).
+
 2009/10/17 (T.S.)
 
 	* drv5282QSPI.c: must use a binary (not simple binary) semaphore

@@ -295,13 +295,13 @@ coldfDMADump(int chan, int dtmr)
 
 	printf("DMA (channel %i)\n",chan);
 	printf("  SAR: 0x%08lx, DAR: 0x%08lx, BCR: 0x%08lx, DSR: 0x%02x\n",
-		MCF5282_DMA_SAR((chan)),
-		MCF5282_DMA_DAR((chan)),
-		MCF5282_DMA_BCR((chan)),
-		MCF5282_DMA_DSR((chan)));
+		(unsigned long)MCF5282_DMA_SAR((chan)),
+		(unsigned long)MCF5282_DMA_DAR((chan)),
+		(unsigned long)MCF5282_DMA_BCR((chan)),
+		(unsigned     )MCF5282_DMA_DSR((chan)));
 	printf("DMATIMER\n");
 	printf("  DTER: 0x%02x DTCR: 0x%08lx\n",
-		MCF5282_TIMER_DTER((dtmr)),
-		MCF5282_TIMER_DTCR((dtmr)));
+		(unsigned     )MCF5282_TIMER_DTER((dtmr)),
+		(unsigned long)MCF5282_TIMER_DTCR((dtmr)));
 	return 0;
 }
