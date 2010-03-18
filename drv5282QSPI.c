@@ -10,6 +10,8 @@
 #include <rtems/error.h>
 #include <bsp.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
 
 #undef IRQDEBUG
 
@@ -26,15 +28,21 @@ static rtems_id 		 mutex    = 0;
 static rtems_id 		 syncS    = 0;
 static volatile rtems_id waitfor  = 0;
 
-#define QSPI_LOCK()		\
-	do {				\
-		if ( !mutex )	\
-			return -1;	\
-		rtems_semaphore_obtain(mutex, RTEMS_WAIT, RTEMS_NO_TIMEOUT);	\
+#define QSPI_LOCK()		        \
+	do {				        \
+		rtems_status_code __sc; \
+		if ( !mutex )	        \
+			return -1;	        \
+		__sc = rtems_semaphore_obtain(mutex, RTEMS_WAIT, RTEMS_NO_TIMEOUT);	\
+		assert( RTEMS_SUCCESSFUL == __sc ); \
 	} while (0)
 
-#define QSPI_UNLOCK()	\
-		do { rtems_semaphore_release(mutex); } while (0)
+#define QSPI_UNLOCK()	        \
+	do {                        \
+		rtems_status_code __sc; \
+		__sc = rtems_semaphore_release(mutex); \
+		assert( RTEMS_SUCCESSFUL == __sc );    \
+	} while (0)
 
 
 /* c.f. pp 10-12 */
@@ -251,12 +259,17 @@ uint16_t	mode = MCF5282_QSPI_QMR_BITS_8 | MCF5282_QSPI_QMR_MSTR;
 static void
 qspi_isr(void *usr_arg, rtems_vector_number v)
 {
+rtems_status_code sc;
 	/* Disable IRQs but leave flags pending */
 	MCF5282_QSPI_QIR = 0;
 #ifdef IRQDEBUG
 	printk("QSPI IRQ\n");
 #else
-	rtems_semaphore_release(waitfor);
+	sc = rtems_semaphore_release( waitfor );
+	if ( RTEMS_SUCCESSFUL != sc ) {
+		printk("drv5282QSPI: FATAL ERROR in ISR: %i\n", sc);
+		abort();
+	}
 #endif
 }
 
@@ -301,10 +314,21 @@ rtems_status_code sc;
 		return 0;
 	}
 
+	/* Use a simple binary semaphore for the mutex:
+	 *   o OK because we never nest.
+	 *   o REQUIRED because we use it for synchronization
+	 *     with termination of async write operation.
+	 *     In this case, the mutex is released by the ISR
+	 *     which would be illegal for a true mutex
+	 *     (obtain/release by same task but ISR may be
+	 *     executing from the 'context' of another task)
+	 *   o REQUIRED because we use it for synchronization
+	 *     at module cleanup time.
+	 */
 	sc = rtems_semaphore_create(
 			rtems_build_name('s','p','i','m'), 
 			1,
-			RTEMS_BINARY_SEMAPHORE | RTEMS_PRIORITY | RTEMS_INHERIT_PRIORITY,
+			RTEMS_SIMPLE_BINARY_SEMAPHORE,
 			0,
 			&mutex);
 	if ( RTEMS_SUCCESSFUL != sc ) {

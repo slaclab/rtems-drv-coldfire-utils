@@ -1,3 +1,11 @@
+2010/03/17 (T.S.)
+
+	* drv5282QSPI.c: revert using a binary semaphore and drop priority
+	inheritance instead. The mutex is also used for synchronization
+	and released by ISR which will fail if ISR executes from a
+	different task context (binary/prio semaphore must be obtained/released
+	by same task).
+
 2009/12/07 (T.S.)
 
 	* drv5282DMA.c: fixed compiler warnings (print formats).
