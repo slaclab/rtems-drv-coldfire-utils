@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <unistd.h>
 
 /* Some magic used from http://www.imbrium.de/uclinux/src/fload.c */
 

@@ -1,3 +1,8 @@
+2010/06/30 (T.S.)
+
+	* flash.c: Need to include <unistd.h> under rtems-4.10 in order to
+	silence compiler warning.
+
 2010/03/17 (T.S.)
 
 	* drv5282QSPI.c: revert using a binary semaphore and drop priority
